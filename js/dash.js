@@ -101,7 +101,7 @@ export const card = (title, body, { span = 1, tag = '', cls = '' } = {}) =>
   `<section class="w-card ${cls}" style="--span:${span}"><header><h4>${title}</h4>${tag ? `<span class="w-tag">${tag}</span>` : ''}</header>${body}</section>`;
 
 // ---------- 움직임 ----------
-export function animateIn(root, { delay = 0, quick = false } = {}) {
+export function animateIn(root, { delay = 0, quick = false, skipCards = false } = {}) {
   const g = window.gsap;
   if (!g) return;
   const D = quick ? 0.7 : 1.1;
@@ -109,7 +109,7 @@ export function animateIn(root, { delay = 0, quick = false } = {}) {
   // 빈 대상은 건너뛰어 경고가 쌓이지 않게 합니다
   const q = (sel) => root.querySelectorAll(sel);
   const from = (els, v, at) => { if (els.length) tl.from(els, v, at); };
-  from(q('.w-card, .w-kpi'), { y: 14, opacity: 0, duration: 0.6, ease: 'power3.out', stagger: 0.05 }, 0);
+  if (!skipCards) from(q('.w-card, .w-kpi'), { y: 14, opacity: 0, duration: 0.6, ease: 'power3.out', stagger: 0.05 }, 0);
   root.querySelectorAll('[data-count]').forEach((el) => {
     const to = +el.dataset.count, f = el.dataset.f, o = { v: 0 };
     tl.to(o, { v: to, duration: D * 1.2, ease: 'power3.out', onUpdate: () => (el.textContent = fmt(o.v, f)) }, 0.1);

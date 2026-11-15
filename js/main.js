@@ -108,6 +108,9 @@ heroApp.innerHTML = `
     ${card('상담 처리', donut([{ name: 'AI 해결', v: 78, color: I }, { name: '담당자', v: 22, color: I3 }], { center: '<b>78%</b>', sub: 'AI 해결' }))}
   </div>`;
 heroApp.querySelectorAll('.w-table .w-tr').forEach((r) => r.style.setProperty('--cols', 4));
+// 기록 목록 높이를 고정해, 새 줄이 들어와도 창 크기가 변하지 않게 합니다
+const heroFeed = heroApp.querySelector('.w-feed');
+function fixFeed() { heroFeed.style.height = ''; heroFeed.style.height = heroFeed.offsetHeight + 'px'; heroFeed.classList.add('is-fixed'); }
 let fi = 5;
 function heroLive() {
   const ul = heroApp.querySelector('.w-feed');
@@ -118,8 +121,11 @@ function heroLive() {
   ul.prepend(li);
   const last = ul.lastElementChild;
   if (hasGsap) {
-    gsap.from(li, { height: 0, opacity: 0, x: -10, duration: 0.6, ease: 'power3.out' });
-    gsap.to(last, { opacity: 0, duration: 0.4, onComplete: () => last.remove() });
+    // 기존 줄은 한 칸 아래로 밀리고, 맨 아래 줄은 창 밖으로 사라집니다 (창 크기는 그대로)
+    const rowH = li.offsetHeight;
+    gsap.from([...ul.children].slice(1), { y: -rowH, duration: 0.6, ease: 'power3.out' });
+    gsap.from(li, { opacity: 0, x: -12, duration: 0.6, ease: 'power3.out' });
+    gsap.to(last, { opacity: 0, duration: 0.3, onComplete: () => last.remove() });
   } else last.remove();
   const [sales, orders] = heroApp.querySelectorAll('.hero-kpis [data-count]');
   bump(sales, +(0.9 + Math.random() * 4.2).toFixed(1));
@@ -131,12 +137,48 @@ function bump(el, add) {
   if (!hasGsap) { el.textContent = fmt(to, f); return; }
   const o = { v: from };
   gsap.to(o, { v: to, duration: 0.9, ease: 'power2.out', onUpdate: () => (el.textContent = fmt(o.v, f)) });
-  gsap.fromTo(el.closest('.w-kpi'), { boxShadow: '0 0 0 0 rgba(99,54,232,.0)' }, { boxShadow: '0 0 0 3px rgba(99,54,232,.25)', duration: 0.3, yoyo: true, repeat: 1 });
+  gsap.fromTo(el, { y: -3 }, { y: 0, duration: 0.5, ease: 'power2.out' });
+}
+// 등장: 흩어진 엑셀 시트가 날아와 대시보드의 각 칸이 됩니다
+const SHEETS = ['매출_쿠팡.xlsx', '주문내역.xlsx', '재고현황.xlsx', '톡톡_문의.csv', '채널별_매출.xlsx', '자동화_로그.xlsx', '발주서_1114.xlsx', '상담_집계.xlsx'];
+const SCATTER = [[-0.08, 0.02, -14], [0.34, -0.08, 9], [0.72, 0.0, -6], [0.86, 0.36, 12], [-0.12, 0.42, 8], [0.62, 0.62, -10], [0.02, 0.8, -7], [0.44, 0.9, 13]];
+function heroAssemble() {
+  const vis = $('.hero-visual');
+  const tiles = [...heroApp.querySelectorAll('.hero-kpis .w-kpi, .hero-row .w-card')];
+  const vb = vis.getBoundingClientRect();
+  const sheets = tiles.map((t, i) => {
+    const el = document.createElement('div');
+    el.className = 'hs';
+    el.innerHTML = `<b>${SHEETS[i % SHEETS.length]}</b><i></i>`;
+    vis.appendChild(el);
+    const [sx, sy, rot] = SCATTER[i % SCATTER.length];
+    gsap.set(el, { left: sx * vb.width, top: sy * vb.height, rotation: rot, opacity: 0, scale: 0.6 });
+    return el;
+  });
+  gsap.set(tiles, { opacity: 0 });
+  const tl = gsap.timeline({ delay: 0.55, onComplete: () => { sheets.forEach((s) => s.remove()); fixFeed(); } });
+  // 1) 흩어진 엑셀 파일이 하나씩 나타납니다
+  tl.to(sheets, { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(1.6)', stagger: 0.07 }, 0);
+  // 2) 각자 대시보드 칸 자리로 날아가 그 크기로 펴집니다
+  tiles.forEach((t, i) => {
+    tl.to(sheets[i], {
+      left: () => t.getBoundingClientRect().left - vis.getBoundingClientRect().left,
+      top: () => t.getBoundingClientRect().top - vis.getBoundingClientRect().top,
+      width: () => t.offsetWidth, height: () => t.offsetHeight, rotation: 0,
+      duration: 0.85, ease: 'power3.inOut',
+    }, 0.9 + i * 0.07);
+    // 3) 시트가 사라지며 진짜 칸이 드러납니다
+    tl.to(sheets[i], { opacity: 0, duration: 0.3 }, 1.7 + i * 0.07)
+      .to(t, { opacity: 1, duration: 0.35 }, 1.62 + i * 0.07);
+  });
+  tl.add(() => animateIn(heroApp, { skipCards: true }), 1.75);
 }
 requestAnimationFrame(() => {
-  animateIn(heroApp, { delay: 0.5 });
-  if (!reduced) setInterval(() => { if (!document.hidden && heroApp.getBoundingClientRect().bottom > 0) heroLive(); }, 3200);
+  if (hasGsap && !reduced) heroAssemble();
+  else { animateIn(heroApp); fixFeed(); }
+  if (!reduced) setTimeout(() => setInterval(() => { if (!document.hidden && heroApp.getBoundingClientRect().bottom > 0) heroLive(); }, 3200), 3500);
 });
+addEventListener('resize', () => heroFeed.classList.contains('is-fixed') && fixFeed());
 
 // ---------- 작동 방식: 엑셀 파일이 대시보드가 되기까지 ----------
 const FILES = [
@@ -147,7 +189,13 @@ const FILES = [
   { n: '톡톡_문의내역.csv', csv: 1, h: ['고객', '문의', '시간'], tag: ['고객', '문의', '시간'], r: [['김○진', '배송 언제 와요?', '10:42'], ['최○우', '필터에서 물이…', '11:05'], ['정○희', '색상 교환', '11:20']], at: [30, 70, 7] },
 ];
 const flStage = $('#flowStage');
-$('#flFiles').innerHTML = FILES.map((f, i) => `<div class="xf${f.csv ? ' is-csv' : ''}" style="left:${f.at[0]}%;top:${f.at[1]}%;--rot:${f.at[2]}deg;z-index:${i + 1}">
+// 위: 대시보드 업로드 자리 · 아래: 폴더 (서류가 폴더에서 위로 올라갑니다)
+flStage.insertAdjacentHTML('afterbegin', `<div class="fl-zone" id="flZone"><span><svg class="logo-svg"><use href="#off8-logo"/></svg>대시보드로 올리기</span></div>
+  <div class="fl-folder" id="flFolder"><i class="ff-back"></i><i class="ff-paper p2"></i><i class="ff-paper"></i></div>`);
+$('#flMatch').insertAdjacentHTML('beforebegin', `<div class="fl-front" id="flFront"><i class="ff-front"><svg class="logo-svg"><use href="#off8-logo"/></svg></i>
+  <span class="ff-label"><b id="flCount">0</b> / 5 · OFF8로 올리는 중</span><span class="ff-bar"><i id="flBar"></i></span></div>`);
+const LAND = [[4, 7, -6], [53, 5, 5], [8, 27, 4], [55, 26, -4], [30, 15, 7]];
+$('#flFiles').innerHTML = FILES.map((f, i) => `<div class="xf${f.csv ? ' is-csv' : ''}" style="left:29.5%;top:60%;--rot:${LAND[i][2]}deg;z-index:${i + 1}">
   <div class="xf-h">${f.n}<small>${f.r.length + 41}행</small></div>
   <div class="xf-g">${f.h.map((h, k) => `<span class="hd">${h}<em>${f.tag[k]}</em></span>`).join('')}${f.r.flat().map((c) => `<span>${c}</span>`).join('')}</div>
   <i class="xf-scan"></i></div>`).join('');
@@ -194,38 +242,54 @@ let flStep = 0;
 const setFlStep = (i) => { if (i === flStep) return; flStep = i; flSteps.forEach((li, k) => li.classList.toggle('is-on', k === i)); };
 if (hasGsap && !reduced) {
   const xf = $$('.xf', flStage);
-  gsap.set(xf, { rotation: (i, el) => parseFloat(el.style.getPropertyValue('--rot')) });
+  gsap.set(xf, { scale: 0.5, rotation: 0, transformOrigin: '50% 100%' });
   const tl = gsap.timeline({ paused: true, defaults: { ease: 'power2.inOut' } });
+  const O = 1.9; // 업로드 장면 길이만큼 뒤 장면을 미룹니다
+  // 0) 올리기: 폴더가 열리고 서류가 한 장씩 대시보드로 올라갑니다
+  const cnt = $('#flCount');
+  tl.to('.ff-front', { rotationX: -32, duration: 0.35, ease: 'power2.out' }, 0.05)
+    .to('#flBar', { width: '100%', duration: 1.25, ease: 'none', onUpdate() { cnt.textContent = Math.min(5, Math.floor(this.progress() * 5 + 0.15)); } }, 0.25);
+  xf.forEach((el, i) => {
+    const t0 = 0.2 + i * 0.22;
+    tl.to(el, { top: `${LAND[i][1]}%`, duration: 0.75, ease: 'power3.out' }, t0)
+      .to(el, { left: `${LAND[i][0]}%`, duration: 0.75, ease: 'sine.inOut' }, t0)
+      .to(el, { scale: 1, rotation: LAND[i][2], duration: 0.75, ease: 'back.out(1.3)' }, t0)
+      .fromTo('#flZone', { boxShadow: '0 0 0 0 rgba(161,140,245,0)' }, { boxShadow: '0 0 0 4px rgba(161,140,245,.18)', duration: 0.12, yoyo: true, repeat: 1, immediateRender: false }, t0 + 0.55);
+  });
+  tl.to('.ff-front', { rotationX: 0, duration: 0.3 }, 1.45)
+    .to(['#flFolder', '#flFront'], { y: 40, opacity: 0, duration: 0.45, ease: 'power2.in' }, 1.6)
   // 1) 읽기: 파일이 가지런히 모이고, 머리글이 인식됩니다
-  tl.to(xf, { left: (i) => `${6 + (i % 2) * 48}%`, top: (i) => `${5 + Math.floor(i / 2) * 31}%`, rotation: 0, duration: 1 }, 0.4)
-    .to($$('.xf-scan', flStage), { opacity: 1, top: '75%', duration: 0.8, stagger: 0.06 }, 1.2)
-    .to($$('.xf-g .hd em', flStage), { opacity: 1, duration: 0.25, stagger: 0.03 }, 1.4)
-    .to($$('.xf-scan', flStage), { opacity: 0, duration: 0.2 }, 2.1)
+    .to('#flZone', { opacity: 0, scale: 1.03, duration: 0.5 }, O + 0.2)
+    .to(xf, { left: (i) => `${6 + (i % 2) * 48}%`, top: (i) => `${5 + Math.floor(i / 2) * 31}%`, rotation: 0, duration: 1 }, O + 0.3)
+    .to($$('.xf-scan', flStage), { opacity: 1, top: '75%', duration: 0.8, stagger: 0.06 }, O + 1.2)
+    .to($$('.xf-g .hd em', flStage), { opacity: 1, duration: 0.25, stagger: 0.03 }, O + 1.4)
+    .to($$('.xf-scan', flStage), { opacity: 0, duration: 0.2 }, O + 2.1)
   // 2) 맞추기: 다르게 적은 같은 상품을 연결합니다
-    .to(xf, { scale: 0.6, opacity: 0, y: -20, duration: 0.6, stagger: 0.04 }, 2.4)
-    .to('#flMatch', { opacity: 1, duration: 0.5 }, 2.8)
-    .from($$('.fl-item', flStage), { x: (i) => (i < 4 ? -20 : 20), opacity: 0, duration: 0.5, stagger: 0.05 }, 2.8)
-    .fromTo('#flMatch .fl-lines', { clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)', duration: 0.7 }, 3.2)
-    .from('#flMatch .fl-badge', { scale: 0, opacity: 0, duration: 0.3, stagger: 0.08 }, 3.6)
+    .to(xf, { scale: 0.6, opacity: 0, y: -20, duration: 0.6, stagger: 0.04 }, O + 2.4)
+    .to('#flMatch', { opacity: 1, duration: 0.5 }, O + 2.8)
+    .from($$('.fl-item', flStage), { x: (i) => (i < 4 ? -20 : 20), opacity: 0, duration: 0.5, stagger: 0.05 }, O + 2.8)
+    .fromTo('#flMatch .fl-lines', { clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)', duration: 0.7 }, O + 3.2)
+    .from('#flMatch .fl-badge', { scale: 0, opacity: 0, duration: 0.3, stagger: 0.08 }, O + 3.6)
   // 3) 보기: 한 장의 대시보드로
-    .to('#flMatch', { opacity: 0, scale: 0.94, duration: 0.5 }, 4.6)
-    .to('#flDash', { opacity: 1, duration: 0.3 }, 4.9)
-    .from($$('#flDash > *'), { y: 40, scale: 0.85, opacity: 0, duration: 0.7, stagger: 0.07, ease: 'power3.out' }, 4.9)
+    .to('#flMatch', { opacity: 0, scale: 0.94, duration: 0.5 }, O + 4.6)
+    .to('#flDash', { opacity: 1, duration: 0.3 }, O + 4.9)
+    .from($$('#flDash > *'), { y: 40, scale: 0.85, opacity: 0, duration: 0.7, stagger: 0.07, ease: 'power3.out' }, O + 4.9)
     .to({}, { duration: 0.6 });
   let st = null;
   st = ScrollTrigger.create({
-    trigger: '#flow', pin: '.flow-pin', start: 'top top', end: () => '+=' + Math.round(innerHeight * 2.6), scrub: true,
+    trigger: '#flow', pin: '.flow-pin', start: 'top top', end: () => '+=' + Math.round(innerHeight * 3.4), scrub: true,
     onRefresh: () => { drawMatchLines(); },
     onUpdate: (s) => {
       tl.progress(s.progress);
       const t = tl.time();
-      setFlStep(t < 1.1 ? 0 : t < 2.5 ? 1 : t < 4.6 ? 2 : 3);
+      setFlStep(t < 2.1 ? 0 : t < 4.3 ? 1 : t < 6.5 ? 2 : 3);
     },
   });
   // 줄 위치는 글꼴이 다 그려진 뒤 다시 잽니다
   document.fonts?.ready.then(() => { drawMatchLines(); ScrollTrigger.refresh(); });
 } else {
   $('#flFiles').style.display = 'none';
+  ['#flZone', '#flFolder', '#flFront'].forEach((s) => ($(s).style.display = 'none'));
   $('#flDash').style.opacity = 1;
   setFlStep(3);
 }
