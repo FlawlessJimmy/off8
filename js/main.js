@@ -1,12 +1,13 @@
 // OFF8 홈 — 스크롤, 첫 화면 실시간 대시보드, 엑셀→대시보드 흐름, 모듈 조립, AI 상담, 샘플 대시보드
 import { kpi, line, hbars, donut, table, feed, steps, card, pill, animateIn, fmt, SAMPLES, board } from './dash.js';
+import { mountWidgets } from './widgets.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const gsap = window.gsap;
 const hasGsap = !!gsap;
-if (hasGsap) gsap.registerPlugin(ScrollTrigger, window.Flip);
+if (hasGsap) gsap.registerPlugin(ScrollTrigger, window.Flip, window.Draggable);
 const I = '#6336E8', I2 = '#A18CF5', I3 = '#DAD2FF', INK = '#101010';
 
 // Beam 시리즈는 따로 불러오고, 실패해도 페이지는 그대로 동작합니다
@@ -318,15 +319,25 @@ const WIDGET = {
 };
 WIDGET.match = () => card('자동 매칭·학습', `<div style="display:grid;grid-template-columns:88px minmax(0,1fr);gap:12px;align-items:center">${donut([{ name: '자동', v: 78, color: I }, { name: '확인', v: 15, color: I2 }, { name: '신규', v: 7, color: I3 }], { center: '<b style="font-size:16px">78%</b>' }).replace('class="w-donut"', 'class="w-donut" style="width:88px;margin:0"')}</div>`, { span: 2, tag: '공통', cls: 'is-common' });
 
-const on = new Set(['sales', 'order']);
+// 스크롤 순서대로 붙는 모듈 (첫 단계는 공통 기능만)
+const STEPS = [
+  { id: null, name: '공통 기능 3종', d: '엑셀을 올리면 양식을 읽고, 같은 상품을 맞추고, 바뀐 내용을 기록합니다.' },
+  { id: 'sales', d: '채널별 매출과 원가·수수료를 반영한 순이익을 한 그래프로 봅니다.' },
+  { id: 'order', d: '쿠팡 발주서와 공급사 주문서를 합쳐 입고 일정까지 이어 줍니다.' },
+  { id: 'stock', d: '출고되면 재고가 자동으로 줄고, 안전재고 아래로 내려가면 알려 줍니다.' },
+  { id: 'settle', d: '날짜별 환율과 요율로 장부를 맞추고, 차이 나는 거래만 골라 줍니다.' },
+  { id: 'ai', d: '네이버 톡톡·자사몰 문의에 AI가 먼저 답하고, 어려운 문의는 담당자에게 넘깁니다.' },
+];
+const modOf = (id) => MODULES.find((x) => x.id === id);
+const on = new Set();
 const bb = $('#buildBoard');
 bb.innerHTML = `<div class="cb-top"><svg class="logo-svg"><use href="#off8-logo"/></svg><span>우리 회사 대시보드 · 미리보기</span></div>` +
-  [...COMMON, ...MODULES].map((m) => WIDGET[m.id]().replace('<section class="w-card', `<section data-w="${m.id}" class="w-card`)).join('');
+  [...COMMON, ...MODULES].map((x) => WIDGET[x.id]().replace('<section class="w-card', `<section data-w="${x.id}" class="w-card`)).join('');
 bb.style.gridAutoFlow = 'row dense';
 const wEl = (id) => bb.querySelector(`[data-w="${id}"]`);
 // 켜진 모듈에 맞춰 칸 너비를 다시 나눠 빈자리가 생기지 않게 합니다
 function layoutBoard() {
-  MODULES.forEach((m) => { wEl(m.id).style.display = on.has(m.id) ? '' : 'none'; });
+  MODULES.forEach((x) => { wEl(x.id).style.display = on.has(x.id) ? '' : 'none'; });
   wEl('sales').style.setProperty('--span', on.has('ai') ? 4 : 6);
   wEl('ai').style.setProperty('--span', on.has('sales') ? 2 : 6);
   const both = on.has('order') && on.has('stock');
@@ -335,47 +346,118 @@ function layoutBoard() {
 }
 layoutBoard();
 
-const btn = (m, fixed) => `<li><button type="button" class="bp-item${fixed ? ' is-fixed' : ''}" data-id="${m.id}" aria-pressed="${fixed || on.has(m.id)}" ${fixed ? 'aria-disabled="true"' : ''}><b>${m.name}</b><span class="sw"></span><small>${m.d}${m.price ? ` · 월 ${fmt(m.price)}원` : ''}</small></button></li>`;
-$('#commonList').innerHTML = COMMON.map((m) => btn(m, true)).join('');
-$('#moduleList').innerHTML = MODULES.map((m) => btn(m)).join('');
+// 오른쪽: 지금 붙는 기능 하나 + 짧은 진행 목록
+const track = $('#bpTrack');
+track.innerHTML = STEPS.map((s, k) => {
+  const mm = s.id && modOf(s.id);
+  return `<li data-k="${k}"><i></i><span>${s.id ? mm.name : s.name}</span><em>${s.id ? '+' + fmt(mm.price) : '기본'}</em></li>`;
+}).join('');
+const rows = $$('li', track);
 
-let priceShown = 69000;
+// 화면 칸에 맞춰 대시보드 전체 크기를 줄입니다 (모듈이 늘어나도 한눈에 보이게)
+const fit = $('#buildFit'), canvas = $('#buildCanvas');
+const fitScale = () => Math.min(1, canvas.clientWidth / fit.offsetWidth, canvas.clientHeight / fit.offsetHeight);
+function refit(animate) {
+  const s = fitScale();
+  if (hasGsap && animate) gsap.to(fit, { scale: s, duration: 0.65, ease: 'power3.inOut' });
+  else if (hasGsap) gsap.set(fit, { scale: s });
+}
+
+let priceShown = 39000;
 function updatePrice() {
-  const sel = MODULES.filter((m) => on.has(m.id));
-  const raw = 39000 + sel.reduce((a, m) => a + m.price, 0);
+  const sel = MODULES.filter((x) => on.has(x.id));
+  const raw = 39000 + sel.reduce((a, x) => a + x.price, 0);
   const pack = raw > 99000;
   const price = pack ? 99000 : raw;
   $('#priceNote').textContent = pack
-    ? `전체 패키지 99,000원 적용 · 따로 고르면 ${fmt(raw)}원`
-    : sel.length ? `기본료 39,000원 + 선택 모듈 ${sel.length}개` : '기본료 39,000원 · 공통 기능 3종';
+    ? `전체 패키지 적용 · 따로 고르면 ${fmt(raw)}원`
+    : sel.length ? `기본료 39,000원 + 모듈 ${sel.length}개` : '기본료 · 공통 기능 3종';
   const el = $('#priceNum');
   if (!hasGsap) { el.textContent = fmt(price); return; }
   const o = { v: priceShown };
   priceShown = price;
   gsap.to(o, { v: price, duration: 0.6, ease: 'power2.out', onUpdate: () => (el.textContent = fmt(o.v)) });
 }
-updatePrice();
-$('#moduleList').addEventListener('click', (e) => {
-  const b = e.target.closest('.bp-item');
-  if (!b) return;
-  const id = b.dataset.id;
-  const turnOn = !on.has(id);
-  turnOn ? on.add(id) : on.delete(id);
-  b.setAttribute('aria-pressed', turnOn);
-  const w = wEl(id);
-  if (hasGsap && window.Flip && !reduced) {
-    const state = Flip.getState(bb.querySelectorAll('.w-card'));
-    layoutBoard();
+
+// 오른쪽 목록에서 이름표가 날아가 왼쪽 칸에 붙습니다
+function flyTo(row, w, name) {
+  const a = row.getBoundingClientRect(), t = w.getBoundingClientRect();
+  if (!a.width || !t.width) return;
+  const chip = document.createElement('div');
+  chip.className = 'bp-fly';
+  chip.textContent = name;
+  document.body.appendChild(chip);
+  gsap.set(chip, { left: a.left + 28, top: a.top + a.height / 2 - 17 });
+  gsap.timeline({ onComplete: () => chip.remove() })
+    .to(chip, { left: t.left + t.width / 2 - chip.offsetWidth / 2, duration: 0.6, ease: 'power2.inOut' }, 0)
+    .to(chip, { top: t.top + t.height / 2 - 17, duration: 0.6, ease: 'power3.in' }, 0)
+    .to(chip, { scale: 0.6, opacity: 0, duration: 0.22, ease: 'power2.in' }, 0.5)
+    .fromTo(w, { boxShadow: '0 0 0 0 rgba(99,54,232,0)' }, { boxShadow: '0 0 0 4px rgba(99,54,232,.45)', duration: 0.25, yoyo: true, repeat: 1 }, 0.55);
+}
+
+let step = -1;
+function setStep(k, animate = true) {
+  if (k === step) return;
+  const forward = k > step;
+  step = k;
+  const want = new Set(STEPS.slice(1, k + 1).map((s) => s.id));
+  const added = [...want].filter((id) => !on.has(id));
+  const anim = animate && hasGsap && window.Flip && !reduced;
+  const state = anim ? Flip.getState(bb.querySelectorAll('.w-card')) : null;
+  on.clear(); want.forEach((id) => on.add(id));
+  layoutBoard();
+  const target = fitScale(); // 칸이 움직이기 전에 새 크기를 먼저 잽니다
+  if (anim) {
     Flip.from(state, {
-      duration: 0.65, ease: 'power3.inOut', absolute: true, nested: true,
-      onEnter: (els) => gsap.fromTo(els, { opacity: 0, scale: 0.88 }, { opacity: 1, scale: 1, duration: 0.55, ease: 'back.out(1.4)', delay: 0.15 }),
-      onLeave: (els) => gsap.to(els, { opacity: 0, scale: 0.88, duration: 0.35 }),
+      // 칸은 제자리 흐름을 유지한 채 움직입니다 (절대 위치로 바꾸면 순간 사라져 보임)
+      duration: 0.65, ease: 'power3.inOut', nested: true,
+      onEnter: (els) => gsap.fromTo(els, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.5)', delay: 0.45 }),
     });
-    if (turnOn) animateIn(w, { delay: 0.25, quick: true });
-  } else layoutBoard();
+    gsap.to(fit, { scale: target, duration: 0.65, ease: 'power3.inOut' });
+    if (forward) added.forEach((id) => {
+      const w = wEl(id);
+      setTimeout(() => flyTo(rows[STEPS.findIndex((s) => s.id === id)], w, modOf(id).name), 80);
+      animateIn(w, { delay: 0.55, quick: true, skipCards: true });
+    });
+  } else if (hasGsap) gsap.set(fit, { scale: target });
+  // 오른쪽 글 바꾸기
+  const s = STEPS[k], mm = s.id && modOf(s.id);
+  rows.forEach((r, i) => { r.classList.toggle('is-on', i <= k); r.classList.toggle('is-now', i === k); });
+  const fill = () => {
+    $('#bpStep').textContent = k ? `모듈 ${k} / 5 · 월 +${fmt(mm.price)}원` : '기본 포함';
+    $('#bpName').textContent = s.id ? mm.name : s.name;
+    $('#bpDesc').textContent = s.d;
+  };
+  const now = $$('#bpNow > *');
+  if (anim) gsap.timeline().to(now, { y: forward ? -14 : 14, opacity: 0, duration: 0.18, stagger: 0.03, overwrite: true }).add(fill).fromTo(now, { y: forward ? 14 : -14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out', stagger: 0.05 });
+  else fill();
   updatePrice();
-});
-once(bb, () => animateIn(bb));
+}
+setStep(0, false);
+document.fonts?.ready.then(() => refit(false));
+addEventListener('resize', () => refit(false));
+
+if (hasGsap && !reduced) {
+  const bst = ScrollTrigger.create({
+    trigger: '#build', pin: '.build-pin', start: 'top top', end: () => '+=' + Math.round(innerHeight * 2.6),
+    onUpdate: (s) => setStep(Math.min(STEPS.length - 1, Math.floor(s.progress * STEPS.length * 0.999 + 0.0001))),
+    onRefresh: () => refit(false),
+  });
+  // 목록을 누르면 그 단계로 이동합니다
+  track.addEventListener('click', (e) => {
+    const r = e.target.closest('li');
+    if (!r) return;
+    const y = bst.start + ((+r.dataset.k + 0.5) / STEPS.length) * (bst.end - bst.start);
+    lenis ? lenis.scrollTo(y, { duration: 1 }) : scrollTo(0, y);
+  });
+  once(bb, () => animateIn(bb, { skipCards: false }));
+} else {
+  setStep(STEPS.length - 1, false);
+  once(bb, () => animateIn(bb));
+}
+
+// ---------- 위젯 대시보드 ----------
+mountWidgets();
 
 // ---------- AI 상담: 채팅 ----------
 const chatLog = $('#chatLog');
