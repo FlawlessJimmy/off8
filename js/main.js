@@ -1,6 +1,6 @@
 // OFF8 홈 — 스크롤, 첫 화면 실시간 대시보드, 엑셀→대시보드 흐름, 모듈 조립, AI 상담, 샘플 대시보드
-import { kpi, line, hbars, donut, table, feed, steps, card, pill, animateIn, fmt, SAMPLES, board } from './dash.js?v=3';
-import { mountWidgets } from './widgets.js?v=3';
+import { kpi, line, hbars, donut, table, feed, steps, card, pill, animateIn, fmt, SAMPLES, board, EN, T } from './dash.js?v=4';
+import { mountWidgets } from './widgets.js?v=4';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -58,6 +58,13 @@ document.addEventListener('click', (e) => {
 
 // ---------- 상단 메뉴 ----------
 const nav = $('#nav');
+// 스크립트가 넣은 글을 바로 영어로 바꿉니다 (크기를 재기 전에)
+const tr = (el) => { if (EN && el) window.i18n.apply(el); return el; };
+// KOR · EN 전환: 무료 업무 진단 버튼 왼쪽
+if (window.i18n) {
+  const tg = window.i18n.mountToggle($('.nav-in'), { className: 'nav-lang' });
+  if (tg) $('.nav-in').insertBefore(tg, $('.nav-cta'));
+}
 const menuBtn = $('.menu-btn');
 const navLinks = $('#navLinks');
 const onScroll = () => nav.classList.toggle('scrolled', scrollY > 8);
@@ -110,7 +117,7 @@ const FEED = [
 ];
 heroApp.innerHTML = `
   <div class="hero-kpis">
-    ${kpi({ label: '오늘 매출', value: 348.2, unit: '만원', f: 'dec', delta: '▲ 12.4%', hero: true })}
+    ${EN ? kpi({ label: '오늘 매출', value: 3.48, unit: '백만원', f: 'dec2', delta: '▲ 12.4%', hero: true }) : kpi({ label: '오늘 매출', value: 348.2, unit: '만원', f: 'dec', delta: '▲ 12.4%', hero: true })}
     ${kpi({ label: '신규 주문', value: 214, unit: '건', delta: '▲ 31건' })}
     ${kpi({ label: '재고 경고', value: 6, unit: '개', delta: '안전재고 미만', tone: 'down' })}
     ${kpi({ label: 'AI 1차 응대', value: 94, unit: '%', f: 'pct', delta: '▲ 6%p' })}
@@ -123,6 +130,7 @@ heroApp.innerHTML = `
     ${card('발주·입고', table(['품목', '수량', '입고 예정', '상태'], [['자동급수기 2L', '240', '11/18', pill('run', '입고 예정')], ['필터 4입', '600', '11/17', pill('wait')], ['세라믹 볼 S', '180', '11/16', pill('ok', '입고 완료')]]), { tag: '쿠팡 · 공급사 통합' })}
     ${card('상담 처리', donut([{ name: 'AI 해결', v: 78, color: I }, { name: '담당자', v: 22, color: I3 }], { center: '<b>78%</b>', sub: 'AI 해결' }))}
   </div>`;
+tr(heroApp);
 heroApp.querySelectorAll('.w-table .w-tr').forEach((r) => r.style.setProperty('--cols', 4));
 // 기록 목록 높이를 고정해, 새 줄이 들어와도 창 크기가 변하지 않게 합니다
 const heroFeed = heroApp.querySelector('.w-feed');
@@ -132,8 +140,8 @@ function heroLive() {
   const ul = heroApp.querySelector('.w-feed');
   const [text, t] = FEED[fi++ % FEED.length];
   const li = document.createElement('li');
-  li.innerHTML = `<i class="w-feed-ic is-${t}"></i><span>${text}</span><time>방금</time>`;
-  ul.querySelectorAll('time').forEach((tm, i) => (tm.textContent = `${(i + 1) * 3}분 전`));
+  li.innerHTML = `<i class="w-feed-ic is-${t}"></i><span>${T(text)}</span><time>${T('방금')}</time>`;
+  ul.querySelectorAll('time').forEach((tm, i) => (tm.textContent = T(`${(i + 1) * 3}분 전`)));
   ul.prepend(li);
   const last = ul.lastElementChild;
   if (hasGsap) {
@@ -144,11 +152,12 @@ function heroLive() {
     gsap.to(last, { opacity: 0, duration: 0.3, onComplete: () => last.remove() });
   } else last.remove();
   const [sales, orders] = heroApp.querySelectorAll('.hero-kpis [data-count]');
-  bump(sales, +(0.9 + Math.random() * 4.2).toFixed(1));
+  const add = +(0.9 + Math.random() * 4.2).toFixed(1);
+  bump(sales, EN ? add / 100 : add); // 영어는 백만 원 단위
   bump(orders, 1 + Math.floor(Math.random() * 3));
 }
 function bump(el, add) {
-  const from = +el.dataset.count, to = +(from + add).toFixed(1), f = el.dataset.f;
+  const from = +el.dataset.count, to = +(from + add).toFixed(el.dataset.f === 'dec2' ? 3 : 1), f = el.dataset.f;
   el.dataset.count = to;
   if (!hasGsap) { el.textContent = fmt(to, f); return; }
   const o = { v: from };
@@ -165,7 +174,7 @@ function heroAssemble() {
   const sheets = tiles.map((t, i) => {
     const el = document.createElement('div');
     el.className = 'hs';
-    el.innerHTML = `<b>${SHEETS[i % SHEETS.length]}</b><i></i>`;
+    el.innerHTML = `<b>${T(SHEETS[i % SHEETS.length])}</b><i></i>`;
     vis.appendChild(el);
     const [sx, sy, rot] = SCATTER[i % SCATTER.length];
     gsap.set(el, { left: sx * vb.width, top: sy * vb.height, rotation: rot, opacity: 0, scale: 0.6 });
@@ -210,15 +219,18 @@ flStage.insertAdjacentHTML('afterbegin', `<div class="fl-zone" id="flZone"><span
   <div class="fl-folder" id="flFolder"><i class="ff-back"></i><i class="ff-paper p2"></i><i class="ff-paper"></i></div>`);
 $('#flMatch').insertAdjacentHTML('beforebegin', `<div class="fl-front" id="flFront"><i class="ff-front"><svg class="logo-svg"><use href="#off8-logo"/></svg></i>
   <span class="ff-label"><b id="flCount">0</b> / 5 · OFF8로 올리는 중</span><span class="ff-bar"><i id="flBar"></i></span></div>`);
+tr(flStage);
 const LAND = [[4, 7, -6], [53, 5, 5], [8, 27, 4], [55, 26, -4], [30, 15, 7]];
 $('#flFiles').innerHTML = FILES.map((f, i) => `<div class="xf${f.csv ? ' is-csv' : ''}" style="left:29.5%;top:60%;--rot:${LAND[i][2]}deg;z-index:${i + 1}">
   <div class="xf-h">${f.n}<small>${f.r.length + 41}행</small></div>
   <div class="xf-g">${f.h.map((h, k) => `<span class="hd">${h}<em>${f.tag[k]}</em></span>`).join('')}${f.r.flat().map((c) => `<span>${c}</span>`).join('')}</div>
   <i class="xf-scan"></i></div>`).join('');
+tr($('#flFiles'));
 const PAIRS = [['[펫]자동급수기 2리터 WH', '자동 급수기 2L 화이트', '98%'], ['실리콘매트_L', '실리콘 매트 L', '96%'], ['필터4입_정품', '필터(4개입)', '91%'], ['세라믹볼 S 아이보리', '새 상품으로 등록', 'new']];
 $('#flMatch').innerHTML = `<div class="fl-col left"><h5>쿠팡 발주서</h5>${PAIRS.map((p) => `<div class="fl-item">${p[0]}</div>`).join('')}</div>
   <div class="fl-col right"><h5>공급사 주문서 · 상품 목록</h5>${PAIRS.map((p) => `<div class="fl-item">${p[1]}</div>`).join('')}</div>
   <svg class="fl-lines"></svg>`;
+tr($('#flMatch'));
 $('#flDash').innerHTML = `
   ${kpi({ label: '오늘 매출', value: 3482000, unit: '원', hero: true })}
   ${kpi({ label: '입고 예정', value: 1140, unit: '개' })}
@@ -227,6 +239,7 @@ $('#flDash').innerHTML = `
   ${card('채널별 매출', line({ series: [{ name: '쿠팡', data: [2.2, 2.9, 2.8, 3.4, 3.6, 3.9, 4.4], color: I }, { name: '네이버', data: [1.1, 1.4, 1.8, 1.6, 2.0, 1.8, 2.3], color: INK }], labels: ['11/8', '11/10', '11/12', '11/14'], legend: false }), { cls: 'fl-t' })}
   ${card('재고', hbars([{ name: '자동급수기 2L', v: 18, safe: 40, max: 100 }, { name: '실리콘 매트 L', v: 26, safe: 30, max: 100 }, { name: '필터 4입', v: 12, safe: 50, max: 100 }], { unit: '개', warn: true }), { cls: 'fl-t' })}
   ${card('자동화 기록', feed([{ text: '파일 5개 · 양식 자동 인식', time: '방금' }, { text: '같은 상품 3개 자동 연결 · 새 상품 1개 등록', t: 'ai', time: '방금' }, { text: '재고 경고 3건 카카오톡 알림', t: 'warn', time: '방금' }]), { cls: 'fl-w' })}`;
+tr($('#flDash'));
 function drawMatchLines() {
   const wrap = $('#flMatch');
   const svg = wrap.querySelector('.fl-lines');
@@ -238,7 +251,7 @@ function drawMatchLines() {
   if (!badges.length) badges = PAIRS.map((p) => {
     const b = document.createElement('span');
     b.className = 'fl-badge' + (p[2] === 'new' ? ' is-new' : '');
-    b.textContent = p[2] === 'new' ? '새 상품' : p[2];
+    b.textContent = p[2] === 'new' ? T('새 상품') : p[2];
     wrap.appendChild(b);
     return b;
   });
@@ -348,6 +361,7 @@ const on = new Set();
 const bb = $('#buildBoard');
 bb.innerHTML = `<div class="cb-top"><svg class="logo-svg"><use href="#off8-logo"/></svg><span>우리 회사 대시보드 · 미리보기</span></div>` +
   [...COMMON, ...MODULES].map((x) => WIDGET[x.id]().replace('<section class="w-card', `<section data-w="${x.id}" class="w-card`)).join('');
+tr(bb);
 bb.style.gridAutoFlow = 'row dense';
 const wEl = (id) => bb.querySelector(`[data-w="${id}"]`);
 // 켜진 모듈에 맞춰 칸 너비를 다시 나눠 빈자리가 생기지 않게 합니다
@@ -365,8 +379,10 @@ layoutBoard();
 const track = $('#bpTrack');
 track.innerHTML = STEPS.map((s, k) => {
   const mm = s.id && modOf(s.id);
-  return `<li data-k="${k}"><i></i><span>${s.id ? mm.name : s.name}</span><em>${s.id ? '+' + fmt(mm.price) : '기본'}</em></li>`;
+  return `<li data-k="${k}"><i></i><span>${T(s.id ? mm.name : s.name)}</span><em>${s.id ? '+' + fmt(mm.price) : T('기본')}</em></li>`;
 }).join('');
+// 영어: 요금 표시를 ₩39,000 꼴로 (숫자 앞에 ₩)
+if (EN) { const pn = $('#priceNum'); pn.parentNode.replaceChildren('₩', pn); }
 const rows = $$('li', track);
 
 // 화면 칸에 맞춰 대시보드 전체 크기를 줄입니다 (모듈이 늘어나도 한눈에 보이게)
@@ -384,9 +400,9 @@ function updatePrice() {
   const raw = 39000 + sel.reduce((a, x) => a + x.price, 0);
   const pack = raw > 99000;
   const price = pack ? 99000 : raw;
-  $('#priceNote').textContent = pack
+  $('#priceNote').textContent = T(pack
     ? `전체 패키지 적용 · 따로 고르면 ${fmt(raw)}원`
-    : sel.length ? `기본료 39,000원 + 모듈 ${sel.length}개` : '기본료 · 공통 기능 3종';
+    : sel.length ? `기본료 39,000원 + 모듈 ${sel.length}개` : '기본료 · 공통 기능 3종');
   const el = $('#priceNum');
   if (!hasGsap) { el.textContent = fmt(price); return; }
   const o = { v: priceShown };
@@ -400,7 +416,7 @@ function flyTo(row, w, name) {
   if (!a.width || !t.width) return;
   const chip = document.createElement('div');
   chip.className = 'bp-fly';
-  chip.textContent = name;
+  chip.textContent = T(name);
   document.body.appendChild(chip);
   gsap.set(chip, { left: a.left + 28, top: a.top + a.height / 2 - 17 });
   gsap.timeline({ onComplete: () => chip.remove() })
@@ -440,9 +456,9 @@ function setStep(k, animate = true) {
   const s = STEPS[k], mm = s.id && modOf(s.id);
   rows.forEach((r, i) => { r.classList.toggle('is-on', i <= k); r.classList.toggle('is-now', i === k); });
   const fill = () => {
-    $('#bpStep').textContent = k ? `모듈 ${k} / 5 · 월 +${fmt(mm.price)}원` : '기본 포함';
-    $('#bpName').textContent = s.id ? mm.name : s.name;
-    $('#bpDesc').textContent = s.d;
+    $('#bpStep').textContent = T(k ? `모듈 ${k} / 5 · 월 +${fmt(mm.price)}원` : '기본 포함');
+    $('#bpName').textContent = T(s.id ? mm.name : s.name);
+    $('#bpDesc').textContent = T(s.d);
   };
   const now = $$('#bpNow > *');
   if (anim) gsap.timeline().to(now, { y: forward ? -14 : 14, opacity: 0, duration: 0.18, stagger: 0.03, overwrite: true }).add(fill).fromTo(now, { y: forward ? 14 : -14, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out', stagger: 0.05 });
@@ -502,7 +518,11 @@ const SCRIPTS = {
     card: '',
   },
 };
-const pickScript = (t) => /배송|언제|도착|출고/.test(t) ? 'ship' : /새|누수|고장|AS|불량|수리|안 ?돼/.test(t) ? 'as' : /교환|반품|색|환불/.test(t) ? 'swap' : 'other';
+const pickScript = EN
+  ? (t) => /ship|deliver|arriv|when|track|order/i.test(t) ? 'ship' : /leak|broke|repair|fix|defect|not work|warranty/i.test(t) ? 'as' : /exchange|swap|return|refund|colou?r/i.test(t) ? 'swap' : 'other'
+  : (t) => /배송|언제|도착|출고/.test(t) ? 'ship' : /새|누수|고장|AS|불량|수리|안 ?돼/.test(t) ? 'as' : /교환|반품|색|환불/.test(t) ? 'swap' : 'other';
+// 영어: 한 글자씩 써 내려가는 글은 미리 바꿔 둡니다
+if (EN) Object.values(SCRIPTS).forEach((s) => { if (s.q) s.q = T(s.q); s.a = T(s.a); s.think = s.think.map(([st, l]) => [st, T(l)]); });
 const wait = (ms) => new Promise((r) => setTimeout(r, reduced ? Math.min(ms, 120) : ms));
 let chatBusy = false;
 const scrollChat = () => { chatLog.scrollTop = chatLog.scrollHeight; };
@@ -547,7 +567,7 @@ $('#chatForm').addEventListener('submit', (e) => {
   $('#chatText').value = '';
   runChat(pickScript(t), t);
 });
-addMsg('ai', '안녕하세요, 펫스토어 AI 상담원입니다. 주문·배송·교환·AS 무엇이든 물어보세요.');
+addMsg('ai', T('안녕하세요, 펫스토어 AI 상담원입니다. 주문·배송·교환·AS 무엇이든 물어보세요.'));
 once($('.chat'), () => setTimeout(() => runChat('ship'), 600), 0.5);
 
 // 생각하는 구슬 다섯 가지 상태
@@ -590,6 +610,7 @@ function setupVoice(m) {
     { who: 'AI 상담원', text: '오전 도착 요청을 배송 메모에 남겼습니다. 문자로도 안내해 드릴게요.', state: 'speaking', d: 0.6, ms: 3800, emotion: 'positive' },
     { who: '통화 종료', text: '통화 요약을 상담 기록에 저장했습니다 · 배송 문의 · AI 해결', state: 'idle', d: 0, ms: 2600 },
   ];
+  if (EN) LINES.forEach((L) => { L.who = T(L.who); L.text = T(L.text); });
   const vt = $('#voiceText'), vs = $('#voiceState'), play = $('#voicePlay'), mic = $('#voiceMic');
   let running = false, stream = null;
   play.addEventListener('click', async () => {
@@ -601,8 +622,8 @@ function setupVoice(m) {
       ring.set({ state: L.state, emotion: L.emotion || 'calm' });
       dirT = L.d ?? dirT;
       speaking = L.state === 'listening' || L.state === 'speaking';
-      vs.textContent = { listening: '고객이 말하는 중', processing: '답변 준비 중', speaking: 'AI가 말하는 중', idle: '통화 종료' }[L.state];
-      if (L.state === 'processing') vt.innerHTML = `<span class="who">${L.who}</span>주문 찾는 중…`;
+      vs.textContent = T({ listening: '고객이 말하는 중', processing: '답변 준비 중', speaking: 'AI가 말하는 중', idle: '통화 종료' }[L.state]);
+      if (L.state === 'processing') vt.innerHTML = `<span class="who">${L.who}</span>${T('주문 찾는 중…')}`;
       else {
         vt.innerHTML = `<span class="who">${L.who}</span><span class="tx"></span>`;
         const tx = vt.querySelector('.tx'), per = (L.ms * 0.75) / Math.max(1, L.text.length);
@@ -614,7 +635,7 @@ function setupVoice(m) {
     ring.set({ state: 'idle', emotion: 'calm' });
     running = false;
     play.disabled = false;
-    play.textContent = '다시 듣기';
+    play.textContent = T('다시 듣기');
   });
   function stopMic() {
     if (!stream) return;
@@ -622,8 +643,8 @@ function setupVoice(m) {
     stream = null;
     ring.set({ stream: null, state: 'idle' });
     mic.classList.remove('is-on');
-    mic.textContent = '내 목소리로 해 보기';
-    vs.textContent = '대기 중';
+    mic.textContent = T('내 목소리로 해 보기');
+    vs.textContent = T('대기 중');
   }
   mic.addEventListener('click', async () => {
     if (stream) { stopMic(); return; }
@@ -632,8 +653,8 @@ function setupVoice(m) {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       ring.set({ stream, state: 'listening', emotion: 'calm' });
       mic.classList.add('is-on');
-      mic.textContent = '마이크 끄기';
-      vs.textContent = '듣는 중';
+      mic.textContent = T('마이크 끄기');
+      vs.textContent = T('듣는 중');
       vt.innerHTML = '<span class="who">내 목소리</span>말해 보세요. 목소리 크기에 맞춰 링이 움직입니다.';
     } catch {
       vt.innerHTML = '<span class="who">안내</span>마이크를 쓸 수 없어 통화 시연으로 대신 보여 드립니다.';
@@ -643,14 +664,14 @@ function setupVoice(m) {
 
 // ---------- 업종별 샘플 대시보드 ----------
 const tabs = $('#sampleTabs'), sBody = $('#sampleBody');
-tabs.innerHTML = SAMPLES.map((s, i) => `<button type="button" class="tab" role="tab" aria-selected="${i === 0}" data-i="${i}">${s.tab}</button>`).join('');
+tabs.innerHTML = SAMPLES.map((s, i) => `<button type="button" class="tab" role="tab" aria-selected="${i === 0}" data-i="${i}">${T(s.tab)}</button>`).join('');
 let sCur = -1;
 function showSample(i, animate = true) {
   if (i === sCur) return;
   sCur = i;
   const s = SAMPLES[i];
   $$('.tab', tabs).forEach((b, k) => b.setAttribute('aria-selected', k === i));
-  $('#sampleWho').textContent = s.who;
+  $('#sampleWho').textContent = T(s.who);
   $('#sampleUrl').textContent = `app.off8.kr/${s.id}`;
   const draw = () => {
     sBody.innerHTML = board(s);

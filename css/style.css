@@ -644,3 +644,27 @@ h2 { font-size: clamp(30px, 4.4vw, 48px); line-height: 1.17; margin-bottom: 16px
   .btn-line { background: rgba(255, 255, 255, 0.08); }
   .nav.scrolled { background: rgba(14, 12, 28, 0.96); }
 }
+
+/* KOR · EN 전환 (상단 메뉴, 무료 업무 진단 버튼 왼쪽) */
+.lang-toggle { display: inline-flex; flex: none; padding: 3px; gap: 2px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); }
+.lang-toggle button { border: 0; background: none; color: var(--muted); font: 700 12px/1 var(--font); letter-spacing: 0.04em; padding: 7px 10px; border-radius: 999px; cursor: pointer; transition: color 0.2s, background 0.2s; }
+.lang-toggle button:hover { color: var(--text); }
+.lang-toggle button.is-on { background: var(--iris); color: #fff; cursor: default; }
+@media (max-width: 960px) {
+  .nav-lang { margin-left: auto; }
+  .nav-lang + .nav-cta { margin-left: 0; }
+}
+@media (max-width: 420px) {
+  .nav-in { gap: 8px; }
+  .lang-toggle button { padding: 7px 8px; font-size: 11.5px; }
+}
+
+/* 영어일 때만: 글이 길어지는 곳 조정 */
+.w-num small.pre { margin: 0 1px 0 0; }
+html[lang='en'] .hero h1 { font-size: clamp(36px, 4.5vw, 58px); }
+html[lang='en'] .w-hbars li { grid-template-columns: 116px 1fr 28px; }
+html[lang='en'] #heroApp .w-tr, html[lang='en'] [data-w='order'] .w-tr { grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.6fr) minmax(0, 0.7fr) minmax(0, 1.3fr); }
+@media (max-width: 380px) {
+  .menu-btn { flex: none; width: 40px; }
+  .nav-cta { padding: 6px 11px; }
+}

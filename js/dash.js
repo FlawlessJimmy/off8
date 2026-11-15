@@ -1,18 +1,33 @@
 // 대시보드 화면 조각(숫자 카드, 선 그래프, 막대, 도넛, 표, 기록)을 만들고 움직이는 곳
 // 화면 속 숫자와 이름은 모두 시연용입니다.
 
+// 영어 모드: i18n.js가 있으면 그 사전으로 바꾸고, 없으면 그대로 둡니다
+const I18 = typeof window !== 'undefined' ? window.i18n : null;
+export const EN = !!(I18 && I18.isEn);
+export const T = (s) => (I18 && typeof s === 'string' ? I18.t(s) : s);
+const Tc = (c) => (typeof c === 'string' && c.trim().startsWith('<') ? c : T(c)); // 태그로 시작하는 칸(배지 등)은 그대로
+
 export const fmt = (n, f) => {
   if (f === 'pct') return n.toFixed(n % 1 ? 1 : 0);
   if (f === 'dec') return n.toFixed(1);
+  if (f === 'dec2') return n.toFixed(2);
   return Math.round(n).toLocaleString('ko-KR');
 };
+
+// 숫자 + 단위. 영어일 때 원은 숫자 앞 ₩, 건·개 같은 세는 단위는 뺍니다
+const UNIT_EN = { '원': ['₩', ''], '백만원': ['₩', 'M'], '원/위안': ['₩', '/CNY'], '원/월': ['₩', '/mo'] };
+export function numUnit(v, unit = '') {
+  if (!EN) return `${v}<small>${unit}</small>`;
+  const [pre, suf] = UNIT_EN[unit] || ['', T(unit)];
+  return `${pre ? `<small class="pre">${pre}</small>` : ''}${v}${suf ? `<small>${suf}</small>` : ''}`;
+}
 
 // ---------- 조각 ----------
 export function kpi({ label, value, unit = '', f = 'int', delta, tone = 'up', hero }) {
   return `<div class="w-kpi${hero ? ' is-hero' : ''}">
-    <span class="w-label">${label}</span>
-    <b class="w-num"><span data-count="${value}" data-f="${f}">${fmt(value, f)}</span><small>${unit}</small></b>
-    ${delta ? `<span class="w-delta ${tone}">${delta}</span>` : ''}
+    <span class="w-label">${T(label)}</span>
+    <b class="w-num">${numUnit(`<span data-count="${value}" data-f="${f}">${fmt(value, f)}</span>`, unit)}</b>
+    ${delta ? `<span class="w-delta ${tone}">${T(delta)}</span>` : ''}
   </div>`;
 }
 
@@ -72,6 +87,10 @@ function lineInner(W, H, { series, bars, id }, fine) {
 
 export function line({ series, labels, h = 190, legend = true, bars }) {
   const id = 'g' + ++uid;
+  // 이름 · 날짜는 그림 정보(data-line)에 담기 전에 바꿔 둡니다 (다시 그릴 때 한국어가 돌아오지 않게)
+  series = series.map((s) => ({ ...s, name: T(s.name) }));
+  if (bars) bars = { ...bars, name: T(bars.name) };
+  labels = labels.map(T);
   const spec = { series: series.map((s) => ({ name: s.name, data: s.data, color: s.color, dash: !!s.dash })), bars: bars || null, id };
   const lg = legend ? `<div class="w-legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}${bars ? `<span><i style="background:${bars.color || '#DAD2FF'}"></i>${bars.name}</span>` : ''}</div>` : '';
   return `${lg}<svg class="w-chart" data-line="${encodeURIComponent(JSON.stringify(spec))}" viewBox="0 0 600 ${h}" preserveAspectRatio="none" aria-hidden="true">
@@ -117,7 +136,7 @@ export function hbars(items, { unit = '', warn } = {}) {
   const max = Math.max(...items.map((i) => i.max || i.v));
   return `<ul class="w-hbars">${items.map((it) => {
     const bad = warn && it.v < it.safe;
-    return `<li><span class="w-hb-name">${it.name}</span><span class="w-hb-track"><i class="w-hb-fill${bad ? ' is-warn' : ''}" style="width:${(it.v / max) * 100}%"></i>${it.safe ? `<em style="left:${(it.safe / max) * 100}%"></em>` : ''}</span><b>${fmt(it.v)}${unit}</b></li>`;
+    return `<li><span class="w-hb-name">${T(it.name)}</span><span class="w-hb-track"><i class="w-hb-fill${bad ? ' is-warn' : ''}" style="width:${(it.v / max) * 100}%"></i>${it.safe ? `<em style="left:${(it.safe / max) * 100}%"></em>` : ''}</span><b>${fmt(it.v)}${T(unit)}</b></li>`;
   }).join('')}</ul>`;
 }
 
@@ -133,27 +152,27 @@ export function donut(segments, { center, sub } = {}) {
     return el;
   }).join('');
   return `<div class="w-donut"><svg viewBox="0 0 140 140" aria-hidden="true"><circle r="${R}" cx="70" cy="70" class="w-arc-bg" />${arcs}</svg>
-    <div class="w-donut-c">${center || ''}${sub ? `<small>${sub}</small>` : ''}</div></div>
-    <ul class="w-keys">${segments.map((s) => `<li><i style="background:${s.color}"></i>${s.name}<b>${Math.round((s.v / total) * 100)}%</b></li>`).join('')}</ul>`;
+    <div class="w-donut-c">${center || ''}${sub ? `<small>${T(sub)}</small>` : ''}</div></div>
+    <ul class="w-keys">${segments.map((s) => `<li><i style="background:${s.color}"></i>${T(s.name)}<b>${Math.round((s.v / total) * 100)}%</b></li>`).join('')}</ul>`;
 }
 
 const PILL = { ok: '완료', wait: '확인 필요', bad: '조치 필요', run: '진행 중', new: '신규' };
-export const pill = (t, label) => `<span class="w-pill is-${t}">${label || PILL[t]}</span>`;
+export const pill = (t, label) => `<span class="w-pill is-${t}">${T(label || PILL[t])}</span>`;
 export function table(cols, rows) {
-  return `<div class="w-table" role="table"><div class="w-tr w-th" role="row">${cols.map((c) => `<span role="columnheader">${c}</span>`).join('')}</div>
-    ${rows.map((r) => `<div class="w-tr" role="row">${r.map((c) => `<span role="cell">${c}</span>`).join('')}</div>`).join('')}</div>`;
+  return `<div class="w-table" role="table"><div class="w-tr w-th" role="row">${cols.map((c) => `<span role="columnheader">${T(c)}</span>`).join('')}</div>
+    ${rows.map((r) => `<div class="w-tr" role="row">${r.map((c) => `<span role="cell">${Tc(c)}</span>`).join('')}</div>`).join('')}</div>`;
 }
 
 export function feed(items) {
-  return `<ul class="w-feed">${items.map((i) => `<li><i class="w-feed-ic is-${i.t || 'ok'}"></i><span>${i.text}</span><time>${i.time}</time></li>`).join('')}</ul>`;
+  return `<ul class="w-feed">${items.map((i) => `<li><i class="w-feed-ic is-${i.t || 'ok'}"></i><span>${T(i.text)}</span><time>${T(i.time)}</time></li>`).join('')}</ul>`;
 }
 
 export function steps(list, at) {
-  return `<ol class="w-steps">${list.map((s, i) => `<li class="${i < at ? 'is-done' : i === at ? 'is-now' : ''}"><i></i><span>${s}</span></li>`).join('')}</ol>`;
+  return `<ol class="w-steps">${list.map((s, i) => `<li class="${i < at ? 'is-done' : i === at ? 'is-now' : ''}"><i></i><span>${T(s)}</span></li>`).join('')}</ol>`;
 }
 
 export const card = (title, body, { span = 1, tag = '', cls = '' } = {}) =>
-  `<section class="w-card ${cls}" style="--span:${span}"><header><h4>${title}</h4>${tag ? `<span class="w-tag">${tag}</span>` : ''}</header>${body}</section>`;
+  `<section class="w-card ${cls}" style="--span:${span}"><header><h4>${T(title)}</h4>${tag ? `<span class="w-tag">${T(tag)}</span>` : ''}</header>${body}</section>`;
 
 // ---------- 움직임 ----------
 export function animateIn(root, { delay = 0, quick = false, skipCards = false } = {}) {
@@ -226,7 +245,7 @@ export const SAMPLES = [
     ],
     body: () => [
       card('월별 매출과 순이익', line({ series: [{ name: '순이익', data: [6.1, 6.8, 7.4, 7.1, 8.6, 9.2, 10.4], color: I }], bars: { name: '매출', data: [31, 33, 36, 35, 41, 44.6, 48.2], color: I3 }, labels: ['5월', '6월', '7월', '8월', '9월', '10월', '11월'] }), { span: 2, tag: '백만원' }),
-      card('상담·AS 단계', `<div class="w-funnel">${[['접수', 14, 100], ['확인 중', 9, 64], ['처리 중', 5, 36], ['완료 (이번 주)', 22, 88]].map(([n, v, w]) => `<div><span>${n}</span><i style="width:${w}%"></i><b>${v}건</b></div>`).join('')}</div>`, { tag: '카카오톡 알림 연동' }),
+      card('상담·AS 단계', `<div class="w-funnel">${[['접수', 14, 100], ['확인 중', 9, 64], ['처리 중', 5, 36], ['완료 (이번 주)', 22, 88]].map(([n, v, w]) => `<div><span>${T(n)}</span><i style="width:${w}%"></i><b>${v}${T('건')}</b></div>`).join('')}</div>`, { tag: '카카오톡 알림 연동' }),
       card('AS 진행 목록', table(['접수 번호', '제품', '증상', '단계', '담당'], [
         ['AS-0412', '자동급수기 2L', '필터 누수', pill('run', '확인 중'), '이○준'],
         ['AS-0409', '스마트 급식기', '타이머 오류', pill('wait', '부품 대기'), '박○아'],
@@ -247,7 +266,7 @@ export const SAMPLES = [
     ],
     body: () => [
       card('일자별 거래액과 환율', line({ series: [{ name: '환율', data: [189.2, 189.9, 190.4, 190.1, 191.0, 190.6, 191.4], color: I }], bars: { name: '거래액', data: [180, 210, 160, 240, 220, 260, 230], color: I3 }, labels: ['11/8', '11/9', '11/10', '11/11', '11/12', '11/13', '11/14'], legend: true }), { span: 2, tag: '거래액 = 백만원' }),
-      card('수익 분배', donut([{ name: '대표', v: 50, color: I }, { name: '파트너', v: 30, color: I2 }, { name: '직원 급여', v: 20, color: I3 }], { center: '<b>4,120만</b>', sub: '이번 달 순이익' }), { tag: '분배 비율 설정' }),
+      card('수익 분배', donut([{ name: '대표', v: 50, color: I }, { name: '파트너', v: 30, color: I2 }, { name: '직원 급여', v: 20, color: I3 }], { center: `<b>${T('4,120만')}</b>`, sub: '이번 달 순이익' }), { tag: '분배 비율 설정' }),
       card('장부 대조 결과', table(['날짜', '거래처', '한국 장부', '중국 장부', '차이', '상태'], [
         ['11/14', '광저우 ○○무역', '3,820,000', '3,820,000', '0', pill('ok', '일치')],
         ['11/13', '이우 ○○상행', '1,140,000', '1,096,000', '44,000', pill('bad', '환율 차이')],
@@ -268,7 +287,7 @@ export const SAMPLES = [
     ],
     body: () => [
       card('일별 상담 처리', line({ series: [{ name: '담당자 연결', data: [9, 7, 11, 8, 6, 10, 9], color: INK }], bars: { name: 'AI 해결', data: [31, 28, 40, 36, 30, 44, 38], color: I3 }, labels: ['월', '화', '수', '목', '금', '토', '일'] }), { span: 2, tag: '건' }),
-      card('문의 유형', donut([{ name: '배송 조회', v: 41, color: I }, { name: 'AS 접수', v: 24, color: INK }, { name: '교환·반품', v: 21, color: I2 }, { name: '기타', v: 14, color: I3 }], { center: '<b>1,096</b>', sub: '건' })),
+      card('문의 유형', donut([{ name: '배송 조회', v: 41, color: I }, { name: 'AS 접수', v: 24, color: INK }, { name: '교환·반품', v: 21, color: I2 }, { name: '기타', v: 14, color: I3 }], { center: '<b>1,096</b>', sub: EN ? 'inquiries' : '건' })),
       card('최근 상담', table(['고객', '채널', '유형', '처리', '시간'], [
         ['김○진', '네이버 톡톡', '배송 조회', pill('ok', 'AI 해결'), '9초'],
         ['최○우', '자사몰 채팅', 'AS 접수', pill('run', '담당자 연결'), '14초'],
@@ -304,12 +323,12 @@ const navIc = (n) => IC[NAV_MAP[n]] || IC.grid;
 export function board(s) {
   return `<div class="board" data-sample="${s.id}">
     <aside class="b-side">
-      <div class="b-logo"><svg class="logo-svg" aria-label="OFF8"><use href="#off8-logo"/></svg><span>워크스페이스</span></div>
-      <nav>${s.nav.map((n, i) => `<span class="${i === s.active ? 'is-on' : ''}">${navIc(n)}${n}</span>`).join('')}</nav>
-      <div class="b-side-foot"><i class="b-live"></i>엑셀 동기화 · 3분 전</div>
+      <div class="b-logo"><svg class="logo-svg" aria-label="OFF8"><use href="#off8-logo"/></svg><span>${T('워크스페이스')}</span></div>
+      <nav>${s.nav.map((n, i) => `<span class="${i === s.active ? 'is-on' : ''}">${navIc(n)}${T(n)}</span>`).join('')}</nav>
+      <div class="b-side-foot"><i class="b-live"></i>${T('엑셀 동기화 · 3분 전')}</div>
     </aside>
     <div class="b-main">
-      <header class="b-top"><div><h3>${s.title}</h3><p>${s.sub}</p></div><span class="b-date">2026.11.15 (일)</span></header>
+      <header class="b-top"><div><h3>${T(s.title)}</h3><p>${T(s.sub)}</p></div><span class="b-date">${T('2026.11.15 (일)')}</span></header>
       <div class="b-kpis">${s.kpis.map(kpi).join('')}</div>
       <div class="b-grid">${s.body().join('')}</div>
     </div>

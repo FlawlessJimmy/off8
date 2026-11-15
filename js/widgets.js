@@ -1,5 +1,5 @@
 // 위젯 대시보드: 칸을 끌어 옮기고 모서리를 당겨 크기를 바꾸면, 칸 크기에 맞춰 보여 주는 데이터 양이 바뀝니다.
-import { line, hbars, donut, table, pill, fmt, animateIn } from './dash.js?v=3';
+import { line, hbars, donut, table, pill, fmt, animateIn, T, numUnit } from './dash.js?v=4';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -22,7 +22,7 @@ const CHATS = [['김○진', '배송 언제 와요?', 'ok', 'AI 해결'], ['최�
 // 칸 안쪽 높이 (머리글 제외)
 const bodyH = (h) => h * ROW + (h - 1) * GAP - 24 - 30;
 const sum = (a) => a.reduce((x, y) => x + y, 0);
-const big = (num, unit, sub, tone = '') => `<div class="wg-big">${num}<small>${unit}</small></div>${sub ? `<div class="wg-sub ${tone}">${sub}</div>` : ''}`;
+const big = (num, unit, sub, tone = '') => `<div class="wg-big">${numUnit(num, unit)}</div>${sub ? `<div class="wg-sub ${tone}">${T(sub)}</div>` : ''}`;
 const chartIn = (html, hpx) => html.replace('class="w-chart"', `class="w-chart" style="height:${Math.max(36, hpx)}px"`);
 const rowsFit = (h, head = 34) => Math.max(1, Math.floor((bodyH(h) - head - 4) / 41));
 
@@ -41,7 +41,7 @@ const TYPES = {
       const series = two ? [{ name: '쿠팡', data: c, color: I }, { name: '네이버', data: v, color: INK }] : [{ name: '매출 합계', data: c.map((x, i) => +(x + v[i]).toFixed(2)), color: I }];
       const tableRows = h >= 3 && w >= 2;
       const ch = bodyH(h) - 40 - (two ? 22 : 22) - 18 - (tableRows ? 120 : 0);
-      let html = `<div class="wg-kline"><b>${fmt(total, 'dec')}<small>백만원</small></b><span class="up">▲ 8.1%</span></div>` + chartIn(line({ series, labels }), ch);
+      let html = `<div class="wg-kline"><b>${numUnit(fmt(total, 'dec'), '백만원')}</b><span class="up">▲ 8.1%</span></div>` + chartIn(line({ series, labels }), ch);
       if (tableRows) html += table(['채널', '매출', '비중'], [['쿠팡', fmt(sum(c), 'dec') + '백만', Math.round((sum(c) / total) * 100) + '%'], ['네이버', fmt(sum(v), 'dec') + '백만', Math.round((sum(v) / total) * 100) + '%']]);
       return { scope, html };
     },
@@ -73,7 +73,7 @@ const TYPES = {
       if (w === 1) return { scope: '1,096건', html: d.split('<ul')[0] };
       if (w === 2) return { scope: '1,096건', html: `<div class="wg-donut-row">${d}</div>` };
       const n = Math.min(CHATS.length, rowsFit(h, 0));
-      return { scope: `최근 ${n}건`, html: `<div class="wg-donut-row wide">${d.split('<ul')[0]}<ul class="w-chats">${CHATS.slice(0, n).map((c) => `<li><span class="av">${c[0][0]}</span><p>${c[1]}</p>${pill(c[2], c[3])}</li>`).join('')}</ul></div>` };
+      return { scope: `최근 ${n}건`, html: `<div class="wg-donut-row wide">${d.split('<ul')[0]}<ul class="w-chats">${CHATS.slice(0, n).map((c) => `<li><span class="av">${T(c[0])[0]}</span><p>${T(c[1])}</p>${pill(c[2], c[3])}</li>`).join('')}</ul></div>` };
     },
   },
   settle: {
@@ -94,7 +94,7 @@ const TYPES = {
       if (w === 1 && h === 1) return { scope: '오늘', html: big(d[d.length - 1], '원/위안', '날짜별 자동 반영') };
       const labels = [0, 0.5, 1].map((t) => dayLabel(28 - n + Math.round(t * (n - 1))));
       if (h === 1) return { scope: `최근 ${n}일`, html: `<div class="wg-split">${big(d[d.length - 1], '원', '위안 기준')}<div class="wg-spark">${chartIn(line({ series: [{ name: '환율', data: d, color: I }], labels: [], legend: false }), 46)}</div></div>` };
-      return { scope: `최근 ${n}일`, html: `<div class="wg-kline"><b>${d[d.length - 1]}<small>원/위안</small></b></div>` + chartIn(line({ series: [{ name: '환율', data: d.map((x) => x - 186), color: I }], labels, legend: false }), bodyH(h) - 40 - 18) };
+      return { scope: `최근 ${n}일`, html: `<div class="wg-kline"><b>${numUnit(d[d.length - 1], '원/위안')}</b></div>` + chartIn(line({ series: [{ name: '환율', data: d.map((x) => x - 186), color: I }], labels, legend: false }), bodyH(h) - 40 - 18) };
     },
   },
 };
@@ -114,7 +114,7 @@ export function mountWidgets() {
     el.style.setProperty('--w', w);
     el.style.setProperty('--h', h);
     const { scope, html } = t.render(w, h);
-    el.querySelector('.scope').textContent = scope;
+    el.querySelector('.scope').textContent = T(scope);
     el.querySelector('.wg-body').innerHTML = html;
     if (animate && gsap) {
       gsap.fromTo(el.querySelector('.scope'), { backgroundColor: '#e3dbff' }, { backgroundColor: '#f7f7fa', duration: 0.9 });
@@ -125,7 +125,7 @@ export function mountWidgets() {
     const el = document.createElement('section');
     el.className = 'wg';
     el.dataset.type = type; el.dataset.w = w; el.dataset.h = h;
-    el.innerHTML = `<header><span class="grip" aria-hidden="true"></span><h4>${TYPES[type].name}</h4><span class="scope"></span><button type="button" class="x" aria-label="${TYPES[type].name} 위젯 빼기">×</button></header><div class="wg-body"></div><span class="wg-rs" aria-hidden="true"></span>`;
+    el.innerHTML = `<header><span class="grip" aria-hidden="true"></span><h4>${T(TYPES[type].name)}</h4><span class="scope"></span><button type="button" class="x" aria-label="${T(`${TYPES[type].name} 위젯 빼기`)}">×</button></header><div class="wg-body"></div><span class="wg-rs" aria-hidden="true"></span>`;
     draw(el);
     return el;
   }
@@ -140,7 +140,7 @@ export function mountWidgets() {
   const addBar = $('#wgAdd');
   function syncAdd() {
     const have = new Set($$('.wg', board).map((e) => e.dataset.type));
-    addBar.innerHTML = Object.keys(TYPES).map((k) => `<button type="button" data-add="${k}" ${have.has(k) ? 'disabled' : ''}>+ ${TYPES[k].name}</button>`).join('');
+    addBar.innerHTML = Object.keys(TYPES).map((k) => `<button type="button" data-add="${k}" ${have.has(k) ? 'disabled' : ''}>+ ${T(TYPES[k].name)}</button>`).join('');
   }
   addBar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-add]');
@@ -232,7 +232,7 @@ export function mountWidgets() {
     say('직접 칸을 끌어 옮기고, 오른쪽 아래 모서리를 당겨 보세요.');
   }
   function say(t) {
-    toast.textContent = t;
+    toast.textContent = T(t);
     gsap.fromTo(toast, { y: 8, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out' });
   }
   const fr = () => frame.getBoundingClientRect();
