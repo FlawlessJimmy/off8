@@ -632,3 +632,15 @@ h2 { font-size: clamp(30px, 4.4vw, 48px); line-height: 1.17; margin-bottom: 16px
 /* 그래프를 실제 크기로 다시 그린 뒤: 넓은 칸의 눈금 숫자 · 날짜 점 */
 .w-ytick { font-size: 10px; fill: #a3a3ae; font-family: inherit; }
 .w-chart.is-fit .w-line, .w-chart.is-fit .w-dot { vector-effect: none; }
+
+/* 휴대폰(2026-11-16): 아이폰 사파리가 메모리 부족으로 페이지를 닫지 않도록 무거운 효과를 덜어 냅니다.
+   - 화면 전체에 고정된 큰 흐림 덩어리 · 입자 겹침 → 흐림 · 움직임 · 겹침 없이 그라디언트만
+   - 유리 패널의 배경 흐림(backdrop-filter) → 불투명에 가까운 단색 */
+@media (max-width: 900px), (pointer: coarse) {
+  .blob { filter: none; animation: none; }
+  .grain { display: none; }
+  .glass, .btn-line, .nav.scrolled, .nav-links { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+  .glass { background: rgba(24, 20, 44, 0.94); }
+  .btn-line { background: rgba(255, 255, 255, 0.08); }
+  .nav.scrolled { background: rgba(14, 12, 28, 0.96); }
+}

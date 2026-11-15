@@ -12,7 +12,22 @@ const I = '#6336E8', I2 = '#A18CF5', I3 = '#DAD2FF', INK = '#101010';
 
 // Beam 시리즈는 따로 불러오고, 실패해도 페이지는 그대로 동작합니다
 let isl = null;
-const islReady = import('./islands.js?v=1').then((m) => (isl = m)).catch((e) => { console.warn('Beam 효과를 불러오지 못했습니다', e); return null; });
+const islReady = import('./islands.js?v=2').then((m) => (isl = m)).catch((e) => { console.warn('Beam 효과를 불러오지 못했습니다', e); return null; });
+
+// ---------- 휴대폰 주소창 대비 ----------
+// 주소창이 접히고 펴질 때마다 화면 높이가 바뀌면, 고정 구간(작동 방식 · 모듈) 길이가 같이 바뀌어
+// 페이지 전체 길이가 출렁이고 보던 위치가 위로 튕깁니다. 휴대폰에서는 처음 높이를 기준으로 고정합니다.
+const touchDev = matchMedia('(pointer: coarse)').matches;
+let vh0 = innerHeight, vw0 = innerWidth;
+const VH = () => (touchDev ? vh0 : innerHeight);
+if (hasGsap) {
+  ScrollTrigger.config({ ignoreMobileResize: true });
+  addEventListener('resize', () => {
+    if (!touchDev || innerWidth === vw0) return;   // 가로 · 세로를 돌린 경우만 다시 잽니다
+    vw0 = innerWidth; vh0 = innerHeight;
+    ScrollTrigger.refresh();
+  });
+}
 
 // ---------- 부드러운 스크롤 ----------
 let lenis = null;
@@ -278,7 +293,7 @@ if (hasGsap && !reduced) {
     .to({}, { duration: 0.6 });
   let st = null;
   st = ScrollTrigger.create({
-    trigger: '#flow', pin: '.flow-pin', start: 'top top', end: () => '+=' + Math.round(innerHeight * 3.4), scrub: true,
+    trigger: '#flow', pin: '.flow-pin', start: 'top top', end: () => '+=' + Math.round(VH() * 3.4), scrub: true,
     onRefresh: () => { drawMatchLines(); },
     onUpdate: (s) => {
       tl.progress(s.progress);
@@ -440,7 +455,7 @@ addEventListener('resize', () => refit(false));
 
 if (hasGsap && !reduced) {
   const bst = ScrollTrigger.create({
-    trigger: '#build', pin: '.build-pin', start: 'top top', end: () => '+=' + Math.round(innerHeight * 2.6),
+    trigger: '#build', pin: '.build-pin', start: 'top top', end: () => '+=' + Math.round(VH() * 2.6),
     onUpdate: (s) => setStep(Math.min(STEPS.length - 1, Math.floor(s.progress * STEPS.length * 0.999 + 0.0001))),
     onRefresh: () => refit(false),
   });
@@ -539,7 +554,12 @@ once($('.chat'), () => setTimeout(() => runChat('ship'), 600), 0.5);
 islReady.then((m) => {
   if (!m) return;
   m.mountBeams();
-  $$('#aiStates .orb-host').forEach((h) => m.orb(h, { state: h.dataset.orb, size: 20 }));
+  const orbs = $$('#aiStates .orb-host').map((h) => m.orb(h, { state: h.dataset.orb, size: 20 }));
+  // 화면 밖 효과는 멈춥니다 (휴대폰 메모리 · 배터리 아끼기)
+  const near = (el, cb) => new IntersectionObserver(([e]) => cb(e.isIntersecting), { rootMargin: '200px 0px' }).observe(el);
+  $$('[data-beam]').forEach((el) => near(el, (on) => m.setBeamActive(el, on)));
+  const ais = $('#aiStates');
+  if (ais) near(ais, (on) => orbs.forEach((o) => o.set({ paused: !on })));
   setupVoice(m);
   ScrollTrigger?.refresh();
 });
@@ -550,6 +570,7 @@ function setupVoice(m) {
   const lv = () => level;
   const dv = () => dir;
   const ring = m.voiceRing($('#voiceRing'), { size: Math.min(280, $('#voiceRing').clientWidth - 20), level: lv, direction: dv });
+  new IntersectionObserver(([e]) => ring.show(e.isIntersecting), { rootMargin: '300px 0px' }).observe($('#voiceRing'));
   m.voiceBeam($('#voiceCap'), { level: lv });
   const tick = (now) => {
     const t = (now - t0) / 1000;

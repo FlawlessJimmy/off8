@@ -52,7 +52,7 @@ export const setBeamActive = (el, on) => el?._beam?.render({ active: on && !redu
 export function orb(host, { state = 'working', size = 20, theme = 'dark' } = {}) {
   const root = createRoot(host);
   let cur = { state, size, theme };
-  const draw = () => root.render(h(ThinkingOrb, { ...cur, 'aria-label': host.getAttribute('aria-label') || undefined, paused: reduced }));
+  const draw = () => root.render(h(ThinkingOrb, { ...cur, 'aria-label': host.getAttribute('aria-label') || undefined, paused: reduced || !!cur.paused }));
   draw();
   return { set: (p) => { cur = { ...cur, ...p }; draw(); } };
 }
@@ -61,9 +61,11 @@ export function orb(host, { state = 'working', size = 20, theme = 'dark' } = {})
 export function voiceRing(host, { size = 260, level, direction }) {
   const root = createRoot(host);
   let cur = { state: 'idle', emotion: 'calm', stream: null };
-  const draw = () => root.render(h(VoiceRing, { size, theme: 'dark', level, direction, hoverBend: true, sensitivity: 0.9, ...cur }));
+  // 화면에서 멀어지면 내려 두어(그래픽 메모리 반납) 휴대폰에서 페이지가 강제로 닫히지 않게 합니다
+  let shown = true;
+  const draw = () => root.render(shown ? h(VoiceRing, { size, theme: 'dark', level, direction, hoverBend: true, sensitivity: 0.9, ...cur }) : null);
   draw();
-  return { set: (p) => { cur = { ...cur, ...p }; draw(); } };
+  return { set: (p) => { cur = { ...cur, ...p }; draw(); }, show: (on) => { if (on === shown) return; shown = on; draw(); } };
 }
 
 // 음성 빛: 요소 아래쪽 가장자리에서 목소리 크기만큼 솟아오르는 빛
