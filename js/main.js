@@ -403,17 +403,18 @@ function setStep(k, animate = true) {
   const want = new Set(STEPS.slice(1, k + 1).map((s) => s.id));
   const added = [...want].filter((id) => !on.has(id));
   const anim = animate && hasGsap && window.Flip && !reduced;
-  const state = anim ? Flip.getState(bb.querySelectorAll('.w-card')) : null;
+  // 흰 판(대시보드 바탕)도 함께 기록해, 높이가 순간적으로 바뀌지 않고 부드럽게 늘어나게 합니다
+  const state = anim ? Flip.getState([bb, ...bb.querySelectorAll('.w-card')]) : null;
   on.clear(); want.forEach((id) => on.add(id));
   layoutBoard();
   const target = fitScale(); // 칸이 움직이기 전에 새 크기를 먼저 잽니다
   if (anim) {
     Flip.from(state, {
       // 칸은 제자리 흐름을 유지한 채 움직입니다 (절대 위치로 바꾸면 순간 사라져 보임)
-      duration: 0.65, ease: 'power3.inOut', nested: true,
+      duration: 0.9, ease: 'power2.inOut', nested: true,
       onEnter: (els) => gsap.fromTo(els, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.5)', delay: 0.45 }),
     });
-    gsap.to(fit, { scale: target, duration: 0.65, ease: 'power3.inOut' });
+    gsap.to(fit, { scale: target, duration: 0.9, ease: 'power2.inOut', overwrite: true });
     if (forward) added.forEach((id) => {
       const w = wEl(id);
       setTimeout(() => flyTo(rows[STEPS.findIndex((s) => s.id === id)], w, modOf(id).name), 80);
