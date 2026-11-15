@@ -628,3 +628,7 @@ h2 { font-size: clamp(30px, 4.4vw, 48px); line-height: 1.17; margin-bottom: 16px
   .bp-track li { padding: 3px 10px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .js .reveal { opacity: 1; transform: none; } }
+
+/* 그래프를 실제 크기로 다시 그린 뒤: 넓은 칸의 눈금 숫자 · 날짜 점 */
+.w-ytick { font-size: 10px; fill: #a3a3ae; font-family: inherit; }
+.w-chart.is-fit .w-line, .w-chart.is-fit .w-dot { vector-effect: none; }

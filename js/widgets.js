@@ -1,5 +1,5 @@
 // 위젯 대시보드: 칸을 끌어 옮기고 모서리를 당겨 크기를 바꾸면, 칸 크기에 맞춰 보여 주는 데이터 양이 바뀝니다.
-import { line, hbars, donut, table, pill, fmt, animateIn } from './dash.js';
+import { line, hbars, donut, table, pill, fmt, animateIn } from './dash.js?v=3';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];

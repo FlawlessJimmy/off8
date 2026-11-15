@@ -28,34 +28,89 @@ function smooth(pts) {
 }
 let uid = 0;
 // series: [{ name, data:[], color }]
-export function line({ series, labels, h = 190, legend = true, bars }) {
-  const W = 600, H = h, pad = 14;
+// 처음에는 600 너비로 그려 두고, 화면에 붙으면 실제 칸 크기(px)로 다시 그립니다.
+// (늘려서 맞추면 점이 타원으로 찌그러지고 선 그리기 애니메이션이 중간에서 끊깁니다)
+// 칸이 넓어지면 날짜마다 작은 점과 왼쪽 눈금 숫자가 더해져 더 자세히 보입니다.
+function lineInner(W, H, { series, bars, id }, fine) {
+  const padX = fine ? (W > 420 ? 34 : 14) : 14, padY = 14, padR = 14;
   const all = series.flatMap((s) => s.data).concat(bars ? bars.data : []);
   const max = Math.max(...all) * 1.12, min = 0;
-  const x = (i, n) => pad + (i * (W - pad * 2)) / (n - 1);
-  const y = (v) => H - pad - ((v - min) / (max - min)) * (H - pad * 2);
-  const id = 'g' + ++uid;
-  const grid = [0.25, 0.5, 0.75].map((t) => `<line x1="0" x2="${W}" y1="${(H * t).toFixed(0)}" y2="${(H * t).toFixed(0)}" />`).join('');
+  const x = (i, n) => padX + (i * (W - padX - padR)) / (n - 1);
+  const y = (v) => H - padY - ((v - min) / (max - min)) * (H - padY * 2);
+  const ticks = [0.25, 0.5, 0.75];
+  const grid = ticks.map((t) => `<line x1="${fine ? padX : 0}" x2="${W}" y1="${(H * t).toFixed(1)}" y2="${(H * t).toFixed(1)}" />`).join('');
   let barsSvg = '';
   if (bars) {
-    const n = bars.data.length, bw = ((W - pad * 2) / n) * 0.5;
+    const n = bars.data.length, bw = ((W - padX - padR) / n) * 0.5;
     barsSvg = bars.data.map((v, i) => {
-      const cx = pad + ((i + 0.5) * (W - pad * 2)) / n;
-      return `<rect class="w-bar" x="${(cx - bw / 2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - pad - y(v)).toFixed(1)}" rx="4" fill="${bars.color || '#DAD2FF'}" />`;
+      const cx = padX + ((i + 0.5) * (W - padX - padR)) / n;
+      return `<rect class="w-bar" x="${(cx - bw / 2).toFixed(1)}" y="${y(v).toFixed(1)}" width="${bw.toFixed(1)}" height="${(H - padY - y(v)).toFixed(1)}" rx="4" fill="${bars.color || '#DAD2FF'}" />`;
     }).join('');
   }
+  let extra = '';
   const paths = series.map((s, k) => {
-    const pts = s.data.map((v, i) => [bars ? pad + ((i + 0.5) * (W - pad * 2)) / s.data.length : x(i, s.data.length), y(v)]);
+    const pts = s.data.map((v, i) => [bars ? padX + ((i + 0.5) * (W - padX - padR)) / s.data.length : x(i, s.data.length), y(v)]);
     const d = smooth(pts);
     const last = pts[pts.length - 1];
-    const area = k === 0 && !bars ? `<path class="w-area" d="${d} L${last[0]},${H} L${pts[0][0]},${H} Z" fill="url(#${id})" />` : '';
-    return `${area}<path class="w-line" d="${d}" stroke="${s.color}" ${s.dash ? 'stroke-dasharray="5 6" data-dash="1"' : ''} /><circle class="w-dot" cx="${last[0]}" cy="${last[1]}" r="4.5" fill="#fff" stroke="${s.color}" stroke-width="2.5" />`;
+    const area = k === 0 && !bars ? `<path class="w-area" d="${d} L${last[0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z" fill="url(#${id})" />` : '';
+    // 점 사이가 넉넉하면 날짜마다 작은 점
+    if (fine && pts.length > 1 && (pts[1][0] - pts[0][0]) > 16) {
+      extra += pts.slice(0, -1).map((p) => `<circle class="w-pt" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.6" fill="#fff" stroke="${s.color}" stroke-width="1.6" />`).join('');
+    }
+    return `${area}<path class="w-line" d="${d}" stroke="${s.color}" ${s.dash ? 'stroke-dasharray="5 6" data-dash="1"' : ''} /><circle class="w-dot" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4.5" fill="#fff" stroke="${s.color}" stroke-width="2.5" />`;
   }).join('');
+  // 넓은 칸: 왼쪽 눈금 숫자
+  if (fine && W > 420) {
+    extra += ticks.map((t) => {
+      const v = max - ((H * t - padY) / (H - padY * 2)) * (max - min);
+      return `<text class="w-ytick" x="0" y="${(H * t + 3.5).toFixed(1)}">${v >= 100 ? Math.round(v) : v.toFixed(1)}</text>`;
+    }).join('');
+  }
+  return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${series[0].color}" stop-opacity=".22"/><stop offset="1" stop-color="${series[0].color}" stop-opacity="0"/></linearGradient></defs>
+    <g class="w-grid">${grid}</g>${barsSvg}${paths}<g class="w-fine">${extra}</g>`;
+}
+
+export function line({ series, labels, h = 190, legend = true, bars }) {
+  const id = 'g' + ++uid;
+  const spec = { series: series.map((s) => ({ name: s.name, data: s.data, color: s.color, dash: !!s.dash })), bars: bars || null, id };
   const lg = legend ? `<div class="w-legend">${series.map((s) => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}${bars ? `<span><i style="background:${bars.color || '#DAD2FF'}"></i>${bars.name}</span>` : ''}</div>` : '';
-  return `${lg}<svg class="w-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${series[0].color}" stop-opacity=".22"/><stop offset="1" stop-color="${series[0].color}" stop-opacity="0"/></linearGradient></defs>
-    <g class="w-grid">${grid}</g>${barsSvg}${paths}</svg>
+  return `${lg}<svg class="w-chart" data-line="${encodeURIComponent(JSON.stringify(spec))}" viewBox="0 0 600 ${h}" preserveAspectRatio="none" aria-hidden="true">
+    ${lineInner(600, h, spec, false)}</svg>
     <div class="w-xlabels">${labels.map((l) => `<span>${l}</span>`).join('')}</div>`;
+}
+
+// 실제 크기로 다시 그리기: 같은 자리의 요소는 좌표만 바꿔, 진행 중인 등장 애니메이션이 이어집니다
+const ATTRS = ['d', 'cx', 'cy', 'x', 'y', 'width', 'height', 'x1', 'x2', 'y1', 'y2'];
+function fitChart(svg) {
+  const W = Math.round(svg.clientWidth), H = Math.round(svg.clientHeight);
+  if (W < 24 || H < 24 || (svg._fw === W && svg._fh === H)) return;
+  svg._fw = W; svg._fh = H;
+  const spec = JSON.parse(decodeURIComponent(svg.dataset.line));
+  const tmp = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  tmp.innerHTML = lineInner(W, H, spec, true);
+  const sel = '.w-grid line, .w-bar, .w-area, .w-line, .w-dot';
+  const oldEls = [...svg.querySelectorAll(sel)], newEls = [...tmp.querySelectorAll(sel)];
+  if (oldEls.length !== newEls.length) { svg.innerHTML = tmp.innerHTML; }
+  else {
+    oldEls.forEach((o, i) => ATTRS.forEach((a) => { const v = newEls[i].getAttribute(a); if (v !== null) o.setAttribute(a, v); }));
+    const of = svg.querySelector('.w-fine'), nf = tmp.querySelector('.w-fine');
+    if (of && nf) of.innerHTML = nf.innerHTML;
+  }
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.classList.add('is-fit');
+  // 아래 날짜 글자도 왼쪽 눈금 숫자만큼 들여 그래프와 줄을 맞춥니다
+  const xl = svg.nextElementSibling;
+  if (xl?.classList.contains('w-xlabels')) xl.style.paddingLeft = (W > 420 ? 20 : 0) + 'px';
+}
+if (typeof window !== 'undefined' && 'ResizeObserver' in window) {
+  const ro = new ResizeObserver((es) => es.forEach((e) => fitChart(e.target)));
+  const watch = (root) => {
+    if (root.matches?.('svg[data-line]')) ro.observe(root);
+    root.querySelectorAll?.('svg[data-line]').forEach((s) => { if (!s._watched) { s._watched = 1; ro.observe(s); } });
+  };
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => n.nodeType === 1 && watch(n)))).observe(document.documentElement, { childList: true, subtree: true });
+  watch(document);
 }
 
 export function hbars(items, { unit = '', warn } = {}) {
@@ -115,13 +170,14 @@ export function animateIn(root, { delay = 0, quick = false, skipCards = false } 
     tl.to(o, { v: to, duration: D * 1.2, ease: 'power3.out', onUpdate: () => (el.textContent = fmt(o.v, f)) }, 0.1);
   });
   root.querySelectorAll('.w-line').forEach((p) => {
-    const len = p.getTotalLength ? p.getTotalLength() : 800;
     if (p.dataset.dash) { tl.from(p, { opacity: 0, duration: 0.8 }, 0.5); return; }
-    g.set(p, { strokeDasharray: len, strokeDashoffset: len });
+    p.setAttribute('pathLength', '1');
+    g.set(p, { strokeDasharray: 1.001, strokeDashoffset: 1.001 });
     tl.to(p, { strokeDashoffset: 0, duration: D * 1.3, ease: 'power2.inOut' }, 0.2);
   });
   from(q('.w-area'), { opacity: 0, duration: 0.9 }, 0.7);
   from(q('.w-dot'), { scale: 0, transformOrigin: 'center', duration: 0.4, ease: 'back.out(3)' }, D * 1.2);
+  from(q('.w-fine'), { opacity: 0, duration: 0.6 }, D * 1.1);
   from(q('.w-bar'), { scaleY: 0, transformOrigin: '50% 100%', duration: 0.8, ease: 'power3.out', stagger: 0.03 }, 0.15);
   from(q('.w-hb-fill'), { scaleX: 0, transformOrigin: '0 50%', duration: 0.9, ease: 'power3.out', stagger: 0.06 }, 0.2);
   from(q('.w-tr:not(.w-th), .w-feed li, .w-steps li, .w-keys li, .w-funnel i'), { x: -8, opacity: 0, duration: 0.5, ease: 'power2.out', stagger: 0.04 }, 0.3);
@@ -223,13 +279,33 @@ export const SAMPLES = [
   },
 ];
 
-const NAV_IC = '<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/></svg>';
+// 메뉴마다 맞는 아이콘 (20×20 선 아이콘)
+const svgI = (body) => `<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+const IC = {
+  grid: svgI('<rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/>'),
+  truck: svgI('<path d="M2.5 5.5h9v8h-9z"/><path d="M11.5 8.5h3l2.5 2.6v2.4h-5.5"/><circle cx="6" cy="14.5" r="1.6"/><circle cx="14" cy="14.5" r="1.6"/>'),
+  boxes: svgI('<path d="M10 2.8l6.2 3.2v7.9L10 17.2 3.8 14V6z"/><path d="M3.8 6L10 9.2 16.2 6"/><path d="M10 9.2v8"/>'),
+  chart: svgI('<path d="M3 16.5h14"/><path d="M4 13l4-4 3 2.6L16.5 5.5"/><path d="M12.8 5.5h3.7v3.7"/>'),
+  coins: svgI('<ellipse cx="8" cy="6" rx="5" ry="2.2"/><path d="M3 6v3.6c0 1.2 2.2 2.2 5 2.2s5-1 5-2.2V6"/><path d="M7.2 13.6c.3 1.1 2.3 1.9 4.8 1.9 2.8 0 5-1 5-2.2V9.7c0-1-1.5-1.9-3.6-2.1"/>'),
+  ledger: svgI('<path d="M5 2.8h8.5l2 2v12.4H5z"/><path d="M8 7h5M8 10h5M8 13h3"/><path d="M5 2.8v14.4"/>'),
+  chat: svgI('<path d="M3.2 5.2a2 2 0 012-2h9.6a2 2 0 012 2v6.4a2 2 0 01-2 2H9.2L5.6 16.6v-3H5.2a2 2 0 01-2-2z"/><path d="M7 7.6h6M7 10.2h4"/>'),
+  wrench: svgI('<path d="M12.6 3.2a3.8 3.8 0 00-4.8 4.9L3.5 12.4a1.6 1.6 0 002.2 2.2L10 10.3a3.8 3.8 0 004.9-4.8l-2.2 2.2-2-.6-.6-2z"/>'),
+  report: svgI('<path d="M5 2.8h7l3 3v11.4H5z"/><path d="M12 2.8v3h3"/><path d="M8 14v-3M10.5 14V9M13 14v-1.8"/>'),
+  fx: svgI('<path d="M4 7h11l-3-3"/><path d="M16 13H5l3 3"/>'),
+  pie: svgI('<path d="M10 3a7 7 0 107 7h-7z"/><path d="M12.5 2.6v5h5a5.6 5.6 0 00-5-5z"/>'),
+  phone: svgI('<rect x="5.5" y="2.5" width="9" height="15" rx="2"/><path d="M8.6 14.6h2.8"/><path d="M8 7.6l1.6 1.6L12.6 6"/>'),
+  spark: svgI('<path d="M9 2.8l1.4 4.1 4.1 1.4-4.1 1.4L9 13.8l-1.4-4.1-4.1-1.4 4.1-1.4z"/><path d="M15 12.2l.6 1.7 1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6z"/>'),
+  headset: svgI('<path d="M4 11V9.5a6 6 0 0112 0V11"/><rect x="3" y="10.5" width="3" height="4.5" rx="1"/><rect x="14" y="10.5" width="3" height="4.5" rx="1"/><path d="M15.5 15c0 1.4-1.5 2.2-3.5 2.2h-1"/>'),
+  inbox: svgI('<path d="M3 11.5l2-7h10l2 7v4.5H3z"/><path d="M3 11.5h4l1 2h4l1-2h4"/>'),
+};
+const NAV_MAP = { '대시보드': 'grid', '발주·입고': 'truck', '발주': 'truck', '재고·출고': 'boxes', '매출': 'chart', '매출·순이익': 'chart', '정산': 'coins', '고객상담': 'chat', '상담·AS': 'wrench', '리포트': 'report', '장부 대조': 'ledger', '환율·요율': 'fx', '수익 분배': 'pie', '직원 입력': 'phone', '상담함': 'inbox', 'AI 답변 설정': 'spark', '상담원': 'headset' };
+const navIc = (n) => IC[NAV_MAP[n]] || IC.grid;
 
 export function board(s) {
   return `<div class="board" data-sample="${s.id}">
     <aside class="b-side">
       <div class="b-logo"><svg class="logo-svg" aria-label="OFF8"><use href="#off8-logo"/></svg><span>워크스페이스</span></div>
-      <nav>${s.nav.map((n, i) => `<span class="${i === s.active ? 'is-on' : ''}">${NAV_IC}${n}</span>`).join('')}</nav>
+      <nav>${s.nav.map((n, i) => `<span class="${i === s.active ? 'is-on' : ''}">${navIc(n)}${n}</span>`).join('')}</nav>
       <div class="b-side-foot"><i class="b-live"></i>엑셀 동기화 · 3분 전</div>
     </aside>
     <div class="b-main">

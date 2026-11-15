@@ -1,6 +1,6 @@
 // OFF8 홈 — 스크롤, 첫 화면 실시간 대시보드, 엑셀→대시보드 흐름, 모듈 조립, AI 상담, 샘플 대시보드
-import { kpi, line, hbars, donut, table, feed, steps, card, pill, animateIn, fmt, SAMPLES, board } from './dash.js';
-import { mountWidgets } from './widgets.js';
+import { kpi, line, hbars, donut, table, feed, steps, card, pill, animateIn, fmt, SAMPLES, board } from './dash.js?v=3';
+import { mountWidgets } from './widgets.js?v=3';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
