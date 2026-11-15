@@ -577,7 +577,16 @@ islReady.then((m) => {
   const orbs = $$('#aiStates .orb-host').map((h) => m.orb(h, { state: h.dataset.orb, size: 20 }));
   // 화면 밖 효과는 멈춥니다 (휴대폰 메모리 · 배터리 아끼기)
   const near = (el, cb) => new IntersectionObserver(([e]) => cb(e.isIntersecting), { rootMargin: '200px 0px' }).observe(el);
-  $$('[data-beam]').forEach((el) => near(el, (on) => m.setBeamActive(el, on)));
+  // 테두리 빛: 화면 근처에 있고 · 스크롤을 멈췄을 때만 움직입니다 (스크롤 중에는 큰 테두리를 매 프레임 다시 그리느라 버벅임)
+  const beamEls = $$('[data-beam]'), beamNear = new Map();
+  let scrolling = false, beamT = null;
+  const syncBeams = () => beamEls.forEach((el) => m.setBeamActive(el, beamNear.get(el) && !scrolling));
+  beamEls.forEach((el) => near(el, (on) => { beamNear.set(el, on); syncBeams(); }));
+  window.lenis?.on('scroll', () => {
+    if (!scrolling) { scrolling = true; syncBeams(); }
+    clearTimeout(beamT);
+    beamT = setTimeout(() => { scrolling = false; syncBeams(); }, 260);
+  });
   const ais = $('#aiStates');
   if (ais) near(ais, (on) => orbs.forEach((o) => o.set({ paused: !on })));
   setupVoice(m);
