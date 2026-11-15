@@ -31,7 +31,7 @@
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 html.lenis, html.lenis body { height: auto; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--font); letter-spacing: -0.01em; word-break: keep-all; overflow-wrap: anywhere; overflow-x: clip; -webkit-font-smoothing: antialiased; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--font); letter-spacing: -0.01em; word-break: keep-all; overflow-wrap: break-word; overflow-x: clip; -webkit-font-smoothing: antialiased; }
 img { max-width: 100%; display: block; }
 a { color: inherit; }
 button { font-family: inherit; }
